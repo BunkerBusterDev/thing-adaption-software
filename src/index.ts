@@ -1,15 +1,19 @@
-import AeClient from "aeClient";
-import Logger from "lib/logger";
+import Config from 'conf';
+import AeClient from './aeClient';
+import ThingConnector from './thingConnector';
+import Logger from "./lib/logger";
 
 class App {
-    private host: string;
-    private port: number;
     private aeClient: AeClient;
+    private thingConnector: ThingConnector;
 
-    constructor(host: string, port: number) {
-        this.host = host;
-        this.port = port;
-        this.aeClient = new AeClient(this.host, this.port, this.restart.bind(this));
+    constructor() {
+        this.aeClient = new AeClient(
+            Config.tas.parentHost,
+            Config.tas.parentPort,
+            this.restart.bind(this)
+        );
+        this.thingConnector = new ThingConnector(this.aeClient.sendToAE.bind(this.aeClient));
     
         // SIGINT 처리
         process.on('SIGINT', this.shutdown.bind(this));
@@ -22,7 +26,8 @@ class App {
 
     // 애플리케이션 시작
     public async start(): Promise<void> {
-        await this.aeClient.connect();
+        await this.aeClient.init();
+        await this.thingConnector.init();
     }
 
     // 애플리케이션 종료
@@ -34,5 +39,5 @@ class App {
 }
 
 // 애플리케이션 실행
-const app = new App('127.0.0.1', 3105);
+const app = new App();
 app.start();

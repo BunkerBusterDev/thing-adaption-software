@@ -15,6 +15,14 @@ class AeClient {
         this.restart = restart;
 
         this.aeSocket = new Net.Socket();
+        Logger.info('[AeClient]: AeClient initialized');
+    }
+
+    public async init() {
+        const maxRetries = 5; // 최대 재시도 횟수
+        let retryCount = 0;    // 현재 재시도 횟수
+        let delayTime = 1000;  // 초기 지연 시간 (1초)
+        
         this.aeSocket.on('data', this.onReceive.bind(this));
         this.aeSocket.on('error', (error) => {
             Logger.error(`[AeClient]: ${error}`);
@@ -24,20 +32,9 @@ class AeClient {
             Logger.info(`[AeClient]: Connection closed`);
             if(this.isConn) {
                 this.isConn = false;
-                restart();
+                this.restart();
             }
         });
-        Logger.info('[AeClient]: AeClient initialized');
-    }
-
-    private onReceive(data: { toString: () => string }) {
-        Logger.info(data);
-    }
-
-    public async connect(): Promise<void> {
-        const maxRetries = 5; // 최대 재시도 횟수
-        let retryCount = 0;    // 현재 재시도 횟수
-        let delayTime = 1000;  // 초기 지연 시간 (1초)
 
         while (!this.isConn && retryCount < maxRetries) {
             try {
@@ -71,7 +68,7 @@ class AeClient {
         }
     }
 
-    public async disconnect(): Promise<void> {
+    public disconnect(): Promise<void> {
         return new Promise((resolve) => {
             if (this.aeSocket.destroyed) {
                 Logger.info('[AeClient]: Socket already destroyed');
@@ -86,8 +83,17 @@ class AeClient {
         });
     }
 
+    public sendToAE(sendData: string) {
+        this.aeSocket.write(sendData);
+    }
+
+    private onReceive(data: { toString: () => string }) {
+        Logger.info(data);
+    }
+
+
     // 지연 함수
-    private delay(ms: number): Promise<void> {
+    private delay(ms: number) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 }
