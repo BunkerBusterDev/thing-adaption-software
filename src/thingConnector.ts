@@ -15,10 +15,15 @@ class ThingConnector {
         this.strData = '';
     }
 
-    public async init() {
-        this.thingSocket.on('message', this.onReceive.bind(this));
-        Wdt.setWatchdogTimer('thingConnector', 1, this.onSensing.bind(this));
-        Logger.info('[ThingConnector]: ThingConnector connected');
+    private onSensing () {
+        const data = Buffer.from('AT+PRINT=SENSOR_DATA\r\n');
+        // Logger.info(`[ThingConnector]: SEND : ${data.toString().trim()} ---->`);
+        this.thingSocket.send(data, Config.tas.thingPort, Config.tas.thingHost, (error) => {
+            if(error){
+                Logger.error('[ThingConnector-onSensing]: Error sending sensing command');
+                this.thingSocket.close();
+            }
+        });
     }
 
     // onReceive는 Thing과 송수신 방식에 따라 수정하여 사용용
@@ -60,29 +65,30 @@ class ThingConnector {
                         }
                     }
 
-                    for (let i = 0; i < Config.upload.length; i++) {
-                        if (Config.upload[i].name === dataObject.name) {
-                            const cin = { containerName: Config.upload[i].name, content: dataObject.content };
-                            Logger.info(`[ThingConnector]: SEND : ${JSON.stringify(cin)} ---->`);
-                            this.SendToAE(`${JSON.stringify(cin)}<EOF>`);
-                            break;
+                    if(Config.tas.state === 'upload') {
+                        for (let i = 0; i < Config.upload.length; i++) {
+                            if (Config.upload[i].containerName === dataObject.name) {
+                                const cin = { containerName: Config.upload[i].containerName, content: dataObject.content };
+                                // Logger.info(`[ThingConnector-onReceive]: SEND : ${JSON.stringify(cin)} ---->`);
+                                console.log(`${JSON.stringify(cin)}<EOF>`);
+                                this.SendToAE(`${JSON.stringify(cin)}<EOF>`);
+                                break;
+                            }
                         }
                     }
                 } catch (error) {
-                    Logger.error(`[ThingConnector]: Error processing data - ${error}`);
+                    Logger.error(`[ThingConnector-onReceive]: Error processing data - ${error}`);
                 }
             }
         }
     }
 
-    private onSensing () {
-        const data = Buffer.from('AT+PRINT=SENSOR_DATA\r\n');
-        // Logger.info(`[ThingConnector]: SEND : ${data.toString().trim()} ---->`);
-        this.thingSocket.send(data, Config.tas.thingPort, Config.tas.thingHost, (error) => {
-            if(error){
-                Logger.error('[ThingConnector]: Error sending sensing command');
-                this.thingSocket.close();
-            }
+    public connect(): Promise<string> {
+        return new Promise((resolve) => {
+            this.thingSocket.on('message', this.onReceive.bind(this));
+            Wdt.setWatchdogTimer('thingConnector', 1, this.onSensing.bind(this));
+            Logger.info('[ThingConnector-start]: ThingConnector connected');
+            resolve('startAeClient');
         });
     }
 }
