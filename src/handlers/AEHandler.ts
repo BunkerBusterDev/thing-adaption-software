@@ -1,7 +1,7 @@
 import Util from 'util';
 
-import Config from 'conf';
-import Logger from 'utils/logger';
+import Config from 'Conf';
+import Logger from 'utils/Logger';
 
 class AeHandler {
     private downloadCount: number = 0;

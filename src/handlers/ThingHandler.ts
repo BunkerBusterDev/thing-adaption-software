@@ -1,6 +1,6 @@
 import Dgram from 'dgram';
-import Logger from 'utils/logger';
-import Config from 'conf';
+import Logger from 'utils/Logger';
+import Config from 'Conf';
 
 class ThingHandler {
     private strData: string = '';

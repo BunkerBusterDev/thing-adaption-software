@@ -1,6 +1,7 @@
-import Config from 'conf';
-import Logger from "utils/logger";
-import Delay from 'utils/delay';
+import Config from 'Conf';
+import Logger from "utils/Logger";
+import Delay from 'utils/Delay';
+import WatchdogTimer from 'utils/WatchdogTimer';
 
 import AEService from 'services/AEService';
 import ThingService from 'services/ThingService';
@@ -16,6 +17,7 @@ class App {
     constructor() {
         // SIGINT 처리
         process.on('SIGINT', this.shutdown.bind(this));
+        WatchdogTimer.startWatchdog();
 
         this.aeService = new AEService(this.restart.bind(this));
         this.thingService = new ThingService(this.aeService.sendToAE.bind(this.aeService));
@@ -41,7 +43,7 @@ class App {
         if(Config.thingAdaptionSoftware.state === 'startUpload') {
             this.retryCount = 0;
             this.delayTime = 1000;
-            Logger.info('[App]: Thing Adaption Software is started');
+            Logger.info('[App]: Thing Adaption Software is starting upload');
         }
     }
 
@@ -74,6 +76,7 @@ class App {
     // 애플리케이션 종료
     private async shutdown(): Promise<void> {
         Logger.info('[App-shutdown]: Received SIGINT. Shutting down gracefully...');
+        WatchdogTimer.stopWatchdog();
         await this.aeService.disconnect();
         process.exit(0);
     }

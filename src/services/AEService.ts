@@ -1,7 +1,7 @@
 import Net from 'net';
-import Config from 'conf';
-import Logger from 'utils/logger';
-import Delay from 'utils/delay';
+import Config from 'Conf';
+import Logger from 'utils/Logger';
+import Delay from 'utils/Delay';
 import AeHandler from 'handlers/AEHandler';
 
 class AeService {
