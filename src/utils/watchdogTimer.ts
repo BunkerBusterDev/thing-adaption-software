@@ -1,5 +1,6 @@
-import events from 'events';
-const watchdogTimer = new events.EventEmitter();
+import Events from 'events';
+
+const watchdogTimer = new Events.EventEmitter();
 
 const watchdogTimerValueQueue: { [key: string]: number } = {};
 const watchdogTickQueue: { [key: string]: number } = {};
