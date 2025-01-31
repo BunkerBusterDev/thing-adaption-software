@@ -1,7 +1,7 @@
 import Dgram from 'dgram';
 import ThingHandler from 'handlers/ThingHandler';
-import Logger from 'utils/logger';
-import * as Wdt from 'utils/watchdogTimer';
+import Logger from 'utils/Logger';
+import WatchdogTimer from 'utils/WatchdogTimer';
 
 class ThingService {
     private thingSocket: Dgram.Socket;
@@ -12,18 +12,18 @@ class ThingService {
         this.thingSocket = Dgram.createSocket('udp4');
     }
 
-    public async startThing(): Promise<string> {
-        return new Promise((resolve) => {
-            Wdt.setWatchdogTimer('thingConnector', 1, () => this.thingHandler.onSensing(this.thingSocket));
-            resolve('startUpload');
-        });
-    }
-
     public async connect(): Promise<string> {
         return new Promise((resolve) => {
             this.thingSocket.on('message', (data) => this.thingHandler.onReceive(data, this.sendToAE));
             Logger.info('[ThingService-connect]: ThingConnector connected');
             resolve('connectAeClient');
+        });
+    }
+
+    public async startThing(): Promise<string> {
+        return new Promise((resolve) => {
+            WatchdogTimer.setWatchdogTimer('thingConnector', 1, () => this.thingHandler.onSensing(this.thingSocket));
+            resolve('startUpload');
         });
     }
 }
