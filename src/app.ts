@@ -1,12 +1,14 @@
 import Config from 'conf';
-import AeClient from './aeClient';
-import ThingConnector from './thingConnector';
-import Logger from "./lib/logger";
-import Delay from 'lib/delay';
+import Logger from "utils/logger";
+import Delay from 'utils/delay';
+
+import AEService from 'services/AEService';
+import ThingService from 'services/ThingService';
 
 class App {
-    private aeClient: AeClient;
-    private thingConnector: ThingConnector;
+    private aeService: AEService;
+    private thingService: ThingService;
+    
     private maxRetries;
     private retryCount;
     private delayTime;
@@ -15,24 +17,28 @@ class App {
         // SIGINT 처리
         process.on('SIGINT', this.shutdown.bind(this));
 
-        this.aeClient = new AeClient(this.restart.bind(this));
-        this.thingConnector = new ThingConnector(this.aeClient.sendToAE.bind(this.aeClient));
+        this.aeService = new AEService(this.restart.bind(this));
+        this.thingService = new ThingService(this.aeService.sendToAE.bind(this.aeService));
+
         this.maxRetries = 5;
         this.retryCount = 0;
         this.delayTime = 1000;
 
-        Config.tas.state = 'startThingConnector';
+        Config.thingAdaptionSoftware.state = 'connectThing';
     }
 
     // 애플리케이션 시작
     public async start(): Promise<void> {
-        if(Config.tas.state === 'startThingConnector') {
-            Config.tas.state = await this.thingConnector.connect();
+        if(Config.thingAdaptionSoftware.state === 'connectThing') {
+            Config.thingAdaptionSoftware.state = await this.thingService.connect();
         }
-        if(Config.tas.state === 'startAeClient' || Config.tas.state === 'restartAeClient') {
-            Config.tas.state = await this.aeClient.connect();
+        if(Config.thingAdaptionSoftware.state === 'connectAeClient' || Config.thingAdaptionSoftware.state === 'reconnectAeClient') {
+            Config.thingAdaptionSoftware.state = await this.aeService.connect();
         }
-        if(Config.tas.state === 'upload') {
+        if(Config.thingAdaptionSoftware.state === 'startThing') {
+            Config.thingAdaptionSoftware.state = await this.thingService.startThing();
+        }
+        if(Config.thingAdaptionSoftware.state === 'startUpload') {
             this.retryCount = 0;
             this.delayTime = 1000;
             Logger.info('[App]: Thing Adaption Software is started');
@@ -41,7 +47,7 @@ class App {
 
     private async restart(): Promise<void> {
         Logger.info('[App-restart]: Restarting application...');
-        Config.tas.state = 'restartAeClient';
+        Config.thingAdaptionSoftware.state = 'reconnectAeClient';
 
         // 현재 지연 시간만큼 대기
         this.retryCount++;
@@ -56,7 +62,7 @@ class App {
             Logger.warn(`[App-restart]: Maximum connection attempts (${this.maxRetries}) exceeded. Retrying in 60 seconds...`);
             
             // 1분 후 재시작
-            await Delay(600000); // 60초 대기
+            await Delay(60000); // 60초 대기
             if (typeof this.restart === 'function') {
                 this.restart(); // App의 restart 메서드 호출
             }
@@ -68,7 +74,7 @@ class App {
     // 애플리케이션 종료
     private async shutdown(): Promise<void> {
         Logger.info('[App-shutdown]: Received SIGINT. Shutting down gracefully...');
-        await this.aeClient.disconnect();
+        await this.aeService.disconnect();
         process.exit(0);
     }
 }

@@ -1,4 +1,4 @@
-const tas = {
+const thingAdaptionSoftware = {
     parentHost: 'ip',
     parentPort: 0,
     thingHost: 'ip',
@@ -8,35 +8,46 @@ const tas = {
 interface iUpDownData {
     id: string;
     name: string;
-    content: unknown;
-    rxTick: number;
 }
 
 const upload: Array<iUpDownData> = [];
 const download: Array<iUpDownData> = [];
 
-const numData1 = 10;
-for(let i=0; i<numData1; i++) {
-    upload[i] = {
-        id: `date1Id#${i+1}`,
-        name: `container_data1Name_${i+1}`,
-        content: 0.0,
-        rxTick: 0
-    };
+let count = 0;
+upload[count++] = {
+    id: 'illums',
+    name: 'container_illums'
 }
 
-const numData2 = 10;
-for(let i=0; i<numData2; i++) {
-    upload[numData1+i] = {
-        id: `data2Id#${i+1}`,
-        name: `container_data2Name_${i+1}`,
-        content: 0.0,
-        rxTick: 0
-    };
+// const numData1 = 10;
+// for(let i=0; i<numData1; i++) {
+//     upload[count++] = {
+//         id: `date1Id#${i+1}`,
+//         name: `container_data1Name_${i+1}`
+//     };
+// }
+
+// const numData2 = 10;
+// for(let i=0; i<numData2; i++) {
+//     upload[count++] = {
+//         id: `data2Id#${i+1}`,
+//         name: `container_data2Name_${i+1}`
+//     };
+// }
+
+upload[count++] = {
+    id: `resLEDs#`,
+    name: `container_resLEDs`,
+};
+
+download[count++] = {
+    id: 'ctrLEDs#',
+    name: 'container_ctrLEDs'
 }
+
 
 const config = {
-    tas: tas,
+    thingAdaptionSoftware: thingAdaptionSoftware,
     upload: upload,
     download: download
 }
