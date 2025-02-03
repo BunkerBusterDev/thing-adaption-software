@@ -1,4 +1,5 @@
 const thingAdaptionSoftware = {
+    state: 'init',
     parentHost: 'ip',
     parentPort: 0,
     thingHost: 'ip',
@@ -35,11 +36,7 @@ upload[count++] = {
 //     };
 // }
 
-upload[count++] = {
-    id: `resLEDs#`,
-    name: `container_resLEDs`,
-};
-
+count = 0;
 download[count++] = {
     id: 'ctrLEDs#',
     name: 'container_ctrLEDs'

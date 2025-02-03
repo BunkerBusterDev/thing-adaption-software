@@ -38,11 +38,11 @@ class App {
             Config.thingAdaptionSoftware.state = await this.aeService.connect();
         }
         if(Config.thingAdaptionSoftware.state === 'startThing') {
+            this.retryCount = 0;
+            this.delayTime = 1000;
             Config.thingAdaptionSoftware.state = await this.thingService.startThing();
         }
         if(Config.thingAdaptionSoftware.state === 'startUpload') {
-            this.retryCount = 0;
-            this.delayTime = 1000;
             Logger.info('[App]: Thing Adaption Software is starting upload');
         }
     }
