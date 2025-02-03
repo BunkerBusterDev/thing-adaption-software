@@ -16,17 +16,30 @@ class AeHandler {
                         const sinkStr = Util.format('%s', line);
                         const sinkObj = JSON.parse(sinkStr);
 
-                        if (!sinkObj.ctname || !sinkObj.content) {
+                        if (!sinkObj.name || !sinkObj.content) {
                             Logger.error('[AeHandler-handleData]: Data format mismatch');
                             continue;
                         }
 
                         if (sinkObj.content === 'hello') {
-                            Logger.info(`[AeHandler-handleData]: Received hello message: ${line}`);
+                            Logger.info(`[AeHandler-handleData]: Received hello message ${line}`);
                             this.downloadCount++;
                         } else {
-                            Logger.info(`[AeHandler-handleData]: Received data for ctname ${sinkObj.ctname}`);
-                            // Further processing logic could go here if needed
+                            for (let j = 0; j < Config.upload.length; j++) {
+                                if (Config.upload[j].name == sinkObj.name) {
+                                    Logger.info(`[AeHandler-handleData]: ACK ${line}`);
+                                    break;
+                                }
+                            }
+    
+                            for (let j = 0; j < Config.download.length; j++) {
+                                if (Config.download[j].name == sinkObj.name) {
+                                    const downBuffer = JSON.stringify({id: Config.download[i].id, content: sinkObj.content});
+                                    Logger.info(`[AeHandler-handleData]: Received message ${downBuffer}`);
+                                    // control_led(sinkObj.content);
+                                    break;
+                                }
+                            }
                         }
                     } catch (error) {
                         Logger.error(`[AeHandler-handleData]: Error processing line - ${error}`);

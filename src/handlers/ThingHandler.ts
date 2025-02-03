@@ -54,7 +54,7 @@ class ThingHandler {
                         for (let i = 0; i < Config.upload.length; i++) {
                             if (Config.upload[i].name === dataObject.name) {
                                 const cin = { name: Config.upload[i].name, content: dataObject.content };
-                                Logger.info(`[ThingHandler-onReceive]: SEND : ${JSON.stringify(cin)} ---->\r\n`);
+                                Logger.info(`[ThingHandler-onReceive]: Send cin to AE ${JSON.stringify(cin)} ---->\r\n`);
                                 sendToAE(`${JSON.stringify(cin)}<EOF>`);
                                 break;
                             }
