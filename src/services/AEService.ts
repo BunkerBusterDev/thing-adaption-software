@@ -1,71 +1,55 @@
-import Net from 'net';
-import Config from 'Conf';
 import Logger from 'utils/Logger';
-import Delay from 'utils/Delay';
-import AeHandler from 'handlers/AEHandler';
+import AEHandler from 'handlers/AEHandler';
 
 class AeService {
-    private aeSocket: Net.Socket;
-    private aeHandler: AeHandler;
+    private aeHandler: AEHandler;
 
-    constructor(private restart: Function) {
-        this.aeSocket = new Net.Socket();
-        this.aeHandler = new AeHandler();
-
-        this.aeSocket.on('data', (data) => this.aeHandler.handleData(data.toString()));
-        this.aeSocket.on('error', (error) => {
-            Logger.error(`[AeService]: ${error}`);
-        });
-        this.aeSocket.on('close', () => {
-            Logger.info('[AeService]: Connection closed');
-            this.aeSocket.destroy();
-            this.restart();
-        });
+    constructor(private getState: Function, private restart: Function) {
+        this.aeHandler = new AEHandler(this.getState, this.restart);
     }
 
-    public async connect(): Promise<string> {
-        return new Promise(async (resolve) => {
-            if (Config.thingAdaptionSoftware.state === 'connectAeClient' || Config.thingAdaptionSoftware.state === 'reconnectAeClient') {
-                try {
-                    this.aeSocket.connect(Config.thingAdaptionSoftware.parentPort, Config.thingAdaptionSoftware.parentHost, async () => {
-                        Logger.info(`[AeService-connect]: Connected to ${Config.thingAdaptionSoftware.parentHost}:${Config.thingAdaptionSoftware.parentPort}`);
-                        this.aeHandler.resetDownloadCount();
-
-                        for (let i = 0; i < Config.download.length; i++) {
-                            const contentInstance = { name: Config.download[i].name, content: 'hello' };
-                            this.aeSocket.write(JSON.stringify(contentInstance) + '<EOF>');
-                            Logger.info(`[AeService-connect]: Sent hello message for ${Config.download[i].name}`);
-                        }
-
-                        await Delay(1000);
-
-                        if (this.aeHandler.getDownloadCount() >= Config.download.length) {
-                            resolve('startThing');
-                        }
-                    });
-                } catch (error) {
-                    Logger.error(`[AeService-connect]: Connection attempt failed - ${error}`);
-                }
+    /**
+     * 서버와의 연결을 수립합니다.
+     * 연결 성공 시 각 다운로드 대상에 대해 초기 'hello' 메시지를 전송하고,
+     * 일정 시간 대기 후 다운로드 응답 개수를 확인하여 'startThing' 문자열로 resolve합니다.
+     *
+     * @returns Promise<string> (성공 시 'startThing' resolve)
+     */
+    public async connect(parentHost: string , parentPort: number): Promise<string> {
+        if (this.getState() === 'connectAeClient' || this.getState() === 'reconnectAeClient') {
+            try {
+                Logger.info(`[AeService-connect]: Connected to ${parentHost}:${parentPort}`);
+                await this.aeHandler.connect(parentHost, parentPort);
+                return 'startThing';
+            } catch (error) {
+                throw error; 
             }
-        });
+        } else {
+            return this.getState();
+        }
     }
 
+
+    /**
+     * 소켓 연결을 종료합니다.
+     *
+     * @returns Promise<void>
+     */
     public async disconnect(): Promise<void> {
-        return new Promise((resolve) => {
-            if (this.aeSocket.destroyed) {
-                Logger.info('[AeService-disconnect]: Socket already destroyed');
-                resolve();
-            } else {
-                this.aeSocket.end(() => {
-                    Logger.info('[AeService-disconnect]: Socket ended');
-                    resolve();
-                });
-            }
-        });
+        try {
+            await this.aeHandler.disconnect();
+            Logger.info('[AeService-disconnect]: Socket already destroyed');
+        } catch (error) {
+
+        }
     }
 
-    public sendToAE(sendData: string): void {
-        this.aeSocket.write(sendData);
+    public async sendToAE(sendData: string): Promise<void> {
+        try {
+            await this.aeHandler.sendMessage(sendData);
+        } catch (error) {
+
+        }
     }
 }
 
