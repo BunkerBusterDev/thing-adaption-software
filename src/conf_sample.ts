@@ -1,5 +1,5 @@
 const thingAdaptionSoftware = {
-    state: 'init',
+    state: 'setupThingConnector',
     parentHost: 'ip',
     parentPort: 0,
     thingHost: 'ip',

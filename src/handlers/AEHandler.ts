@@ -1,15 +1,15 @@
 import Net from 'net';
 import Util from 'util';
 
-import Config from 'Conf';
 import Delay from 'utils/Delay';
 import Logger from 'utils/Logger';
+import { thingAdaptionSoftware, upload, download } from 'Conf';
 
 class AeHandler {
     private aeSocket: Net.Socket;
     private downloadCount: number = 0;
 
-    constructor(private getState: Function, private restart: Function) {
+    constructor(private restart: Function) {
         this.aeSocket = new Net.Socket();
     }
 
@@ -27,9 +27,9 @@ class AeHandler {
      *
      * @param data - 소켓에서 수신된 문자열 데이터
      */
-    public handleData(data: string): void {
+    private handleData(data: string): void {
         // 현재 상태가 특정 연결/업로드 상태일 때만 처리
-        if(this.getState() === 'connectAeClient' || this.getState() === 'reconnectAeClient' || this.getState() === 'startUpload') {
+        if(thingAdaptionSoftware.state === 'startAEConnector' || thingAdaptionSoftware.state === 'startUpload') {
             const dataArry = data.split('<EOF>');
             if (dataArry.length >= 2) {
                 for (let i = 0; i < dataArry.length - 1; i++) {
@@ -48,17 +48,17 @@ class AeHandler {
                             this.downloadCount++;
                         } else {
                             // 업로드 대상에 대한 ACK 처리
-                            for (let j = 0; j < Config.upload.length; j++) {
-                                if (Config.upload[j].name == sinkObj.name) {
+                            for (let j = 0; j < upload.length; j++) {
+                                if (upload[j].name == sinkObj.name) {
                                     Logger.info(`[AeHandler-handleData]: ACK ${line}`);
                                     break;
                                 }
                             }
     
                             // 다운로드 대상 메시지 처리
-                            for (let j = 0; j < Config.download.length; j++) {
-                                if (Config.download[j].name == sinkObj.name) {
-                                    const downBuffer = JSON.stringify({id: Config.download[i].id, content: sinkObj.content});
+                            for (let j = 0; j < download.length; j++) {
+                                if (download[j].name == sinkObj.name) {
+                                    const downBuffer = JSON.stringify({id: download[i].id, content: sinkObj.content});
                                     Logger.info(`[AeHandler-handleData]: Received message ${downBuffer}`);
                                     // 예: 하드웨어 제어 등 추가 작업 수행
                                     // control_led(sinkObj.content);
@@ -74,7 +74,13 @@ class AeHandler {
         }
     }
 
-    public sendMessage(sendData: string): Promise<boolean> {
+    /**
+     * TAS에서 수집된 센싱 값을 AE로 전송합니다.
+     *
+     * @param sendData - 소켓으로 전송할 센싱값
+     * @returns  Promise<void> 
+     */
+    public sendMessage(sendData: string): Promise<void> {
         return new Promise((resolve, reject) => {
             try {
                 if(this.aeSocket) {
@@ -83,14 +89,24 @@ class AeHandler {
                     reject();
                 }
             } catch (error) {
-                reject(error);
+                reject();
             } finally {
-                resolve(true);
+                resolve();
             }
         });
     }
 
-    public connect(parentHost: string, parentPort: number): Promise<void> {
+    /**
+     * AE 서버와 TCP 통신을 통해 연결합니다.
+     * 연결 성공 시 각 다운로드 대상에 대해 초기 'hello' 메시지를 전송하고,
+     * 일정 시간 대기 후 다운로드 응답 개수를 확인하여 resolve합니다.
+     * 응답 개수가 부족한 경우 reject합니다.
+     *
+     * @param parentHost - AE의 ip
+     * @param parentPort - AE의 port
+     * @returns  Promise<void> 
+     */
+    public startAEConnector(): Promise<void> {
         return new Promise((resolve, reject) => {
             this.aeSocket.removeAllListeners();
             this.aeSocket.on('data', (data: Buffer) => {
@@ -98,31 +114,31 @@ class AeHandler {
                 this.handleData(strData);
             });
             this.aeSocket.on('error', (error: Error) => {
-                Logger.error(`[AEHandler]: ${error}`);
+                Logger.error(`[AEHandler-startAEConnector]: ${error}`);
             });
             this.aeSocket.on('close', () => {
-                Logger.info('[AEHandler]: Connection closed');
+                Logger.info('[AEHandler-startAEConnector]: Connection closed');
                 if(this.aeSocket) {
                     this.aeSocket.destroy();
                     this.restart();
                 }
             });
-            this.aeSocket.connect(parentPort, parentHost, async () => {
+            this.aeSocket.connect(thingAdaptionSoftware.parentPort, thingAdaptionSoftware.parentHost, async () => {
                 this.resetDownloadCount();
 
                 // 각 다운로드 대상에 대해 'hello' 메시지 전송
-                for (let i = 0; i < Config.download.length; i++) {
-                    const contentInstance = { name: Config.download[i].name, content: 'hello' };
+                for (let i = 0; i < download.length; i++) {
+                    const contentInstance = { name: download[i].name, content: 'hello' };
                     if(this.aeSocket) {
                         this.aeSocket.write(JSON.stringify(contentInstance) + '<EOF>');
-                        Logger.info(`[AEHandler-connect]: Sent hello message for ${Config.download[i].name}`);
+                        Logger.info(`[AEHandler-startAEConnector]: Sent hello message for ${download[i].name}`);
                     }
                 }
 
                 // 일정 시간 대기 후 응답 개수 확인 (비즈니스 로직에 따라 조정)
                 await Delay(1000);
 
-                if (this.getDownloadCount() >= Config.download.length) {
+                if (this.getDownloadCount() >= download.length) {
                     resolve();
                 } else {
                     reject();
@@ -131,14 +147,18 @@ class AeHandler {
         });
     }
 
-    public disconnect(): Promise<void> {
+    /**
+     * AE 서버와 TCP 통신을 종료합니다.
+     *
+     * @returns  Promise<void> 
+     */
+    public stopAEConnector(): Promise<string> {
         return new Promise((resolve) => {
             if (!this.aeSocket || this.aeSocket.destroyed) {
-                resolve();
+                resolve('destroyed');
             } else {
                 this.aeSocket.end(() => {
-                    Logger.info('[AEHandler-disconnect]: Socket ended');
-                    resolve();
+                    resolve('ended');
                 });
             }
         });

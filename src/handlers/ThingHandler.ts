@@ -1,20 +1,50 @@
+import Dgram from 'dgram';
 import Logger from 'utils/Logger';
-import Config from 'Conf';
+import { thingAdaptionSoftware, upload } from 'Conf';
 
 class ThingHandler {
     private strData: string;
+    private thingSocket: Dgram.Socket;
 
-    constructor(private getState: Function) {
+    constructor(private sendToAEService: Function) {
         this.strData = '';
+        this.thingSocket = Dgram.createSocket('udp4');
+    }
+
+    /**
+     * 소켓 이벤트를 설정합니다.
+     * 수신된 메시지는 ThingHandler의 onReceive를 통해 처리합니다.
+     */
+    public setupSocket(): Promise<void> {
+        return new Promise((resolve) => {
+            this.thingSocket.on('message', (data) => {
+                this.handleData(data);
+            });
+            resolve();
+        });
+    }
+
+    public sendMessage(data: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const command = Buffer.from(`${data}\r\n`);
+            this.thingSocket.send(command, thingAdaptionSoftware.thingPort, thingAdaptionSoftware.thingHost, (error) => {
+                if (!error) {
+                    resolve();
+                } else {
+                    this.thingSocket.close();
+                    reject();
+                }
+            });
+
+        });
     }
 
     /**
      * UDP 소켓으로부터 수신된 데이터를 처리합니다.
      *
      * @param data - UDP 소켓으로부터 전달된 데이터 (Buffer)
-     * @param sendToAE - 처리된 데이터를 AE로 전송하기 위한 콜백 함수
      */
-    public onReceive(data: Buffer, sendToAE: Function): void {
+    private handleData(data: Buffer): void {
         // 수신된 Buffer 데이터를 문자열로 변환하고,
         // 'data' 키를 "data"로 변경(문자열 포맷 보정),
         // 탭(\t)과 개행문자(\r\n)를 제거하여 정제합니다.
@@ -60,18 +90,17 @@ class ThingHandler {
                     }
 
                     // upload 준비가 완료된 상태에서만 AE로 전송
-                    if (this.getState() === 'startUpload') {
-                        for (let i = 0; i < Config.upload.length; i++) {
-                            if (Config.upload[i].name === dataObject.name) {
-                                const cin = { name: Config.upload[i].name, content: dataObject.content };
-                                Logger.info(`[ThingHandler-onReceive]: Send cin to AE ${JSON.stringify(cin)} ---->\r\n`);
-                                sendToAE(`${JSON.stringify(cin)}<EOF>`);
+                    if (thingAdaptionSoftware.state === 'startUpload') {
+                        for (let i = 0; i < upload.length; i++) {
+                            if (upload[i].name === dataObject.name) {
+                                const cin = { name: upload[i].name, content: dataObject.content };
+                                this.sendToAEService(cin);
                                 break;
                             }
                         }
                     }
                 } catch (error) {
-                    Logger.error(`[ThingHandler-onReceive]: Error processing data - ${error}`);
+                    Logger.error(`[ThingHandler-handleData]: Error processing data - ${error}`);
                 }
             }
         }

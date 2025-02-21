@@ -1,68 +1,76 @@
-import Dgram from 'dgram';
-import ThingHandler from 'handlers/ThingHandler';
-import Config from 'Conf';
 import Logger from 'utils/Logger';
-import WatchdogTimer from 'utils/WatchdogTimer';
+import ThingHandler from 'handlers/ThingHandler';
+import { setWatchdogTimer, deleteWatchdogTimer } from 'utils/WatchdogTimer';
 
 class ThingService {
-    private thingSocket: Dgram.Socket;
     private thingHandler: ThingHandler;
 
-    constructor(private getState: Function, private sendToAE: Function) {
-        this.thingHandler = new ThingHandler(this.getState);
-        this.thingSocket = Dgram.createSocket('udp4');
+    constructor(private sendToAE: Function) {
+        this.thingHandler = new ThingHandler(this.sendToAEService.bind(this));
     }
 
     /**
-     * 소켓 이벤트를 설정합니다.
-     * 수신된 메시지는 ThingHandler의 onReceive를 통해 처리합니다.
+     * UDP 통신을 위해 소켓을 초기화하는 Handler 호출
      */
-    public async setupSocket(): Promise<string> {
-        return new Promise((resolve) => {
-            this.thingSocket.on('message', (data) => {
-                this.thingHandler.onReceive(data, this.sendToAE)
-            });
-            Logger.info('[ThingService-setupSocket]: ThingConnector is set up');
-            resolve('connectAeClient');
-        });
+    public async setupThingConnector(): Promise<string> {
+        try {
+            Logger.info('[ThingService-setupThingConnector]: Running business logic for setting up ThingConnector...');
+            await this.thingHandler.setupSocket();
+            Logger.info('[ThingService-setupThingConnector]: ThingConnector set up successfully');
+            return 'startAEConnector';
+        } catch (error) {
+            Logger.error(`[ThingService-setupThingConnector]: ${error}`);
+            throw 'setupThingConnector';
+        }
     }
 
     /**
      * 센싱 명령 전송을 주기적으로 실행하기 위해 WatchdogTimer를 설정합니다.
-     * 이를 통해 일정 주기마다 sendSensingCommand가 호출됩니다.
+     * 이를 통해 일정 주기마다 sendSensingMessage가 호출됩니다.
      */
-    public async startThing(): Promise<string> {
+    public async startThingConnector(): Promise<string> {
         return new Promise((resolve) => {
-            WatchdogTimer.setWatchdogTimer('startThing', 1, () => this.sendSensingCommand());
-            Logger.info('[ThingService-startThing]: ThingConnector has started');
-            resolve('startUpload');
+            try {
+                Logger.info('[ThingService-startThingConnector]: Running business logic for starting ThingConnector...');
+                setWatchdogTimer('startThingConnector', 1, () => this.sendSensingMessage());
+                Logger.info('[ThingService-startThingConnector]: ThingConnector started successfully');
+                resolve('startUpload');
+            } catch (error) {
+                Logger.error(`[ThingService-startThingConnector]: ${error}`);
+                throw 'startThingConnector';
+            }
         });
     }
 
     /**
      * 센싱 명령 전송을 위한 WatchdogTimer를 제거합니다.
      */
-    public async stopThing(): Promise<void> {
+    public async stopThingConnector(): Promise<void> {
         return new Promise((resolve) => {
-            WatchdogTimer.deleteWatchdogTimer('startThing');
-            Logger.info('[ThingService-startThing]: ThingConnector has stopped');
+            deleteWatchdogTimer('startThingConnector');
+            Logger.info('[ThingService-stopThingConnector]: ThingConnector is stopped');
             resolve();
         });
     }
 
     /**
-     * 센싱 명령을 UDP로 송신합니다.
+     * 센싱 명령을 전송합니다.
      */
-    public sendSensingCommand(): void {
-        const command = Buffer.from('AT+PRINT=SENSOR_DATA\r\n');
-        this.thingSocket.send(command, Config.thingAdaptionSoftware.thingPort, Config.thingAdaptionSoftware.thingHost, (error) => {
-            if (error) {
-                Logger.error('[ThingService-sendSensingCommand]: Error sending sensing command');
-                this.thingSocket.close();
-            } else {
-                Logger.info('[ThingService-sendSensingCommand]: Sensing command sent successfully');
-            }
-        });
+    public async sendSensingMessage(): Promise<void> {
+        const data = 'AT+PRINT=SENSOR_DATA';
+        try {
+            await this.thingHandler.sendMessage(data);
+            Logger.info('[ThingService-sendSensingMessage]: Sensing command send successfully');
+        } catch (error) {
+            Logger.error('[ThingService-sendSensingMessage]: Error send sensing command');
+        }
+    }
+
+    /**
+     * 센싱된 데이터를 AEService를 통해 AE로 전송
+     */
+    public async sendToAEService(cin: object): Promise<void> {
+        this.sendToAE(`${JSON.stringify(cin)}<EOF>`);
     }
 }
 
