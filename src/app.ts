@@ -23,7 +23,7 @@ class App {
         this.aeService = new AEService(this.restart.bind(this));
         this.thingService = new ThingService(this.aeService.sendToAE.bind(this.aeService));
 
-        this.maxRetries = 5;
+        this.maxRetries = 10;
         this.retryCount = 0;
         this.delayTime = 1000;
     }
