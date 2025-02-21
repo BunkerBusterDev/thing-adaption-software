@@ -1,15 +1,12 @@
-import Config from 'Conf';
-import Logger from "utils/Logger";
 import Delay from 'utils/Delay';
-import WatchdogTimer from 'utils/WatchdogTimer';
+import Logger from 'utils/Logger';
+import { thingAdaptionSoftware } from 'Conf';
+import { startWatchdog, stopWatchdog, deleteAllWatchdogTimer } from 'utils/WatchdogTimer';
 
 import AEService from 'services/AEService';
 import ThingService from 'services/ThingService';
 
 class App {
-    private state: string;
-    private parentHost: string;
-    private parentPort: number;
     private aeService: AEService;
     private thingService: ThingService;
     
@@ -18,49 +15,33 @@ class App {
     private delayTime;
 
     constructor() {
+        startWatchdog();
+        
         // SIGINT 처리
         process.on('SIGINT', this.shutdown.bind(this));
-        WatchdogTimer.startWatchdog();
 
-        this.state = 'connectThing';
-        this.parentHost = Config.thingAdaptionSoftware.parentHost;
-        this.parentPort = Config.thingAdaptionSoftware.parentPort;
-
-        this.aeService = new AEService(this.getState.bind(this), this.restart.bind(this));
-        this.thingService = new ThingService(this.getState.bind(this), this.aeService.sendToAE.bind(this.aeService));
+        this.aeService = new AEService(this.restart.bind(this));
+        this.thingService = new ThingService(this.aeService.sendToAE.bind(this.aeService));
 
         this.maxRetries = 5;
         this.retryCount = 0;
         this.delayTime = 1000;
     }
 
-    // 애플리케이션 시작
-    public async start(): Promise<void> {
-        try {
-            if(this.state === 'connectThing') {
-                this.state = await this.thingService.setupSocket();
-            }
-            if(this.state === 'connectAeClient' || this.state === 'reconnectAeClient') {
-                this.state = await this.aeService.connect(this.parentHost, this.parentPort);
-            }
-            if(this.state === 'startThing') {
-                this.retryCount = 0;
-                this.delayTime = 1000;
-                this.state = await this.thingService.startThing();
-            }
-            if(this.state === 'startUpload') {
-                Logger.info('[App]: Thing Adaption Software is starting upload');
-            }
-        } catch (error) {
-            Logger.error(`[App-start]: App start is failed`);
-            this.restart();
-        }
+    // 애플리케이션 종료
+    private async shutdown(): Promise<void> {
+        Logger.info('[App-shutdown]: Received SIGINT. Shutting down gracefully...');
+        deleteAllWatchdogTimer();
+        stopWatchdog();
+        await this.aeService.stopAEConnector();
+        process.exit(0);
     }
 
-    private async restart(): Promise<void> {
+    private async restart(state: string): Promise<void> {
         Logger.info('[App-restart]: Restarting application...');
-        this.state = 'reconnectAeClient';
-        await this.thingService.stopThing();
+        thingAdaptionSoftware.state = state;
+        await this.thingService.stopThingConnector();
+        deleteAllWatchdogTimer();
 
         // 현재 지연 시간만큼 대기
         this.retryCount++;
@@ -83,16 +64,31 @@ class App {
         await this.start();
     }
 
-    // 애플리케이션 종료
-    private async shutdown(): Promise<void> {
-        Logger.info('[App-shutdown]: Received SIGINT. Shutting down gracefully...');
-        WatchdogTimer.stopWatchdog();
-        await this.aeService.disconnect();
-        process.exit(0);
-    }
-
-    private getState(): string {
-        return this.state;
+    // 애플리케이션 시작
+    public async start(): Promise<void> {
+        try {
+            if(thingAdaptionSoftware.state === 'setupThingConnector') {
+                thingAdaptionSoftware.state = await this.thingService.setupThingConnector();
+                this.retryCount = 0;
+                this.delayTime = 1000;
+            }
+            if(thingAdaptionSoftware.state === 'startAEConnector') {
+                thingAdaptionSoftware.state = await this.aeService.startAEConnector();
+                this.retryCount = 0;
+                this.delayTime = 1000;
+            }
+            if(thingAdaptionSoftware.state === 'startThingConnector') {
+                thingAdaptionSoftware.state = await this.thingService.startThingConnector();
+                this.retryCount = 0;
+                this.delayTime = 1000;
+            }
+            if(thingAdaptionSoftware.state === 'startUpload') {
+                Logger.info('[App-start]: Thing Adaption Software is starting upload');
+            }
+        } catch (error: any) {
+            Logger.error(`[App-start]: App start is failed`);
+            this.restart(error);
+        }
     }
 }
 
