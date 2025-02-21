@@ -120,7 +120,7 @@ class AeHandler {
                 Logger.info('[AEHandler-startAEConnector]: Connection closed');
                 if(this.aeSocket) {
                     this.aeSocket.destroy();
-                    this.restart();
+                    this.restart('startAEConnector');
                 }
             });
             this.aeSocket.connect(thingAdaptionSoftware.parentPort, thingAdaptionSoftware.parentHost, async () => {
